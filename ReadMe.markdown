@@ -1,11 +1,11 @@
-= Mercury
+# Mercury
 
 
-== What is Mercury ?
+## What is Mercury ?
 
 Mercury is a syslog forwarder.
 
-== Why another one ?
+## Why another one ?
 
 the main goals are :
 
@@ -16,9 +16,9 @@ the main goals are :
   * if you use a log aggregator, all the filters and complex-dispatching will run on the aggregator not the source host
   * if you have lots of vms, containers, jails, chroot, you may need a lightweight forwarder
 
-== configuration
+## configuration
 
-=== rules
+### rules
 
   1.  Each configuration block is a specific file.
   2.  Each configuration block is a json serialization in a file.
@@ -32,7 +32,7 @@ the main goals are :
   10. The key `"output"` is a list of `"id"` of `output instance`
 
 
-=== `i_devlog` driver
+### `i_devlog` driver
 
   * type : input driver
   * arguments :
@@ -42,14 +42,14 @@ the main goals are :
       * meaning : the name of the datagram unix socket to listen to
 
 
-=== `i_krnlog` driver
+### `i_krnlog` driver
 
   * type : input driver
   * arguments :
     * none
 
 
-=== `i_devlog` driver
+### `i_devlog` driver
 
   * type : input driver
   * arguments :
@@ -59,7 +59,7 @@ the main goals are :
       * meaning : seconds between two health report about mercury
 
 
-=== `i_fifo` driver
+### `i_fifo` driver
 
   * type : input driver
     * arguments :
@@ -74,7 +74,7 @@ the main goals are :
       * meaning : `"facility.level"` of any new message
 
 
-=== `i_tailfile` driver
+### `i_tailfile` driver
 
   * type : input driver
   * arguments :
@@ -89,7 +89,7 @@ the main goals are :
       * meaning : `"facility.level"` of any new message
 
 
-=== `o_appendfile` driver
+### `o_appendfile` driver
 
   * type : input driver
   * arguments :
@@ -98,7 +98,7 @@ the main goals are :
       * meaning : name of the local file where the log are stored
 
 
-=== `o_tcp5424` driver
+### `o_tcp5424` driver
 
   * type : input driver
   * arguments :
@@ -107,7 +107,7 @@ the main goals are :
       * meaning : `"hostname:port"` of the destination
 
 
-=== `o_tls5424` driver
+### `o_tls5424` driver
 
   * type : input driver
   * arguments :
