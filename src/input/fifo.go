@@ -4,7 +4,8 @@ import	(
 	"io"
 	"os"
 	"syscall"
-	"../message"
+
+	"github.com/nathanaelle/syslog5424"
 )
 
 
@@ -14,7 +15,7 @@ type	FIFOReader	struct {
 	AppName		string		`json:"appname"`
 	Priority	string		`json:"priority"`
 
-	prio		int
+	prio		*syslog5424.Priority
 	fi_des		*os.File
 }
 
@@ -37,7 +38,8 @@ func (fifo *FIFOReader) Read(p []byte) (n int, err error) {
 func (fifo *FIFOReader)Run(dest chan<- Message, errchan chan<- error) {
 	var err error
 	fifo.end	= make(chan bool,1)
-	fifo.prio,err	= message.PriorityDecode(fifo.Priority)
+	fifo.prio	= new(syslog5424.Priority)
+	err		= fifo.prio.Set(fifo.Priority)
 	if err != nil {
 		errchan <- &InputError{ fifo.Driver, fifo.Id,"Priority "+fifo.Priority, err }
 		return
@@ -50,7 +52,7 @@ func (fifo *FIFOReader)Run(dest chan<- Message, errchan chan<- error) {
 		return
 	}
 
-	data	:= make(chan string)
+	data	:= make(chan string,100)
 	defer	fifo.fi_des.Close()
 
 	go reader_to_channel( fifo.fi_des , data )
@@ -58,7 +60,7 @@ func (fifo *FIFOReader)Run(dest chan<- Message, errchan chan<- error) {
 	for {
 		select{
 			case line := <- data:
-				dest <- packmsg(fifo.Id, *message.CreateMessage(line, fifo.AppName, fifo.prio))
+				dest <- packmsg(fifo.Id, syslog5424.CreateMessage(fifo.AppName, *fifo.prio, line))
 
 			case <- fifo.end:
 				return

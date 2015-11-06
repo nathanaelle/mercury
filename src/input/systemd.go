@@ -3,11 +3,6 @@ package	input
 import	(
 	"os"
 	"net"
-	"bytes"
-	"strings"
-	"unicode"
-
-	"../message"
 )
 
 
@@ -22,8 +17,33 @@ func (jrnl *JournalReader)DriverName() string {
 }
 
 
+
+func (jrnl *JournalReader)cope_with(conn *net.UnixConn, buffer []byte, dest chan<- Message) {
+	_,_,err := conn.ReadFrom(buffer)
+	if err != nil {
+		jrnl.errchan <- &InputError{ jrnl.Driver, jrnl.Id,"ReadFrom "+jrnl.Journald, err }
+		return
+	}
+
+	line	:= rtrim_blank(buffer)
+	if (len(line) == 0 ){
+		return
+	}
+
+	l, err := parse_3164_or_5424( jrnl.Id, line )
+	if err != nil {
+		jrnl.errchan <- &InputError{ jrnl.Driver, jrnl.Id,"parse_3164_or_5424 "+jrnl.Journald, err }
+		return
+	}
+
+	dest <- l
+}
+
+
 func (jrnl *JournalReader)Run(dest chan<- Message, errchan chan<- error) {
 	jrnl.end	= make(chan bool,1)
+	jrnl.errchan	= errchan
+
 	conn, err	:= net.ListenUnixgram("unixgram",  &net.UnixAddr { jrnl.Journald, "unixgram" } )
 
 	for err != nil {
@@ -52,28 +72,11 @@ func (jrnl *JournalReader)Run(dest chan<- Message, errchan chan<- error) {
 
 	for {
 		select {
-			case <-jrnl.end:
-				return
+		case <-jrnl.end:
+			return
 
-			default:
-				buffer	:= make([]byte, 65536)
-				_, _, err := conn.ReadFrom(buffer)
-				if err != nil {
-					errchan <- &InputError{ jrnl.Driver, jrnl.Id,"ReadFrom "+jrnl.Journald, err }
-					return
-				}
-
-				line	:= string(bytes.TrimRight(buffer,"\t \n\r\000"))
-				if (line == "" ){
-					continue
-				}
-				pos	:= strings.Index(line, ">")
-
-				if  pos > 0 && unicode.IsDigit( rune(line[pos+1]) ) {
-					dest <- packmsg(jrnl.Id, *message.ParseMessage_5424( line ))
-				} else {
-					dest <- packmsg(jrnl.Id, *message.ParseMessage_3164( line ))
-				}
+		default:
+			jrnl.cope_with(conn, make([]byte, 65536), dest )
 		}
 	}
 }

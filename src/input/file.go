@@ -3,7 +3,8 @@ package	input
 import	(
 	"os"
 	"io"
-	"../message"
+
+	"github.com/nathanaelle/syslog5424"
 	"gopkg.in/fsnotify.v1"
 
 )
@@ -17,7 +18,7 @@ type	FileReader struct {
 	Priority	string		`json:"priority"`
 
 	pos		int64
-	prio		int
+	prio		*syslog5424.Priority
 	watcher		*fsnotify.Watcher
 }
 
@@ -83,7 +84,8 @@ func (file *FileReader)Run(dest chan<- Message, errchan chan<- error) {
 	var err error
 	file.end	= make(chan bool,1)
 
-	file.prio,err	= message.PriorityDecode(file.Priority)
+	file.prio	= new(syslog5424.Priority)
+	err		= file.prio.Set(file.Priority)
 	if err != nil {
 		errchan <- &InputError{ file.Driver, file.Id,"Priority "+file.Priority , err }
 		return
@@ -97,7 +99,7 @@ func (file *FileReader)Run(dest chan<- Message, errchan chan<- error) {
 
 	file.watcher.Add(file.Source)
 
-	data	:= make(chan string)
+	data	:= make(chan string,100)
 	defer	file.Close()
 
 	go reader_to_channel( file , data )
@@ -105,7 +107,7 @@ func (file *FileReader)Run(dest chan<- Message, errchan chan<- error) {
 	for {
 		select{
 			case line := <- data:
-				dest <- packmsg(file.Id, *message.CreateMessage(line, file.AppName, file.prio))
+				dest <- packmsg(file.Id, syslog5424.CreateMessage(file.AppName, *file.prio, line))
 
 			case <- file.end:
 				return

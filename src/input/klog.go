@@ -1,7 +1,8 @@
+// +build linux
+
 package	input
 
 import	(
-	"../message"
 )
 
 
@@ -77,7 +78,12 @@ func (klr *KlogReader)Run(dest chan<- Message, errchan chan<- error) {
 	for {
 		select {
 			case line := <-raw_klog:
-				dest <- packmsg(klr.Id, *message.ParseMessage_KLog( boot_ts, line ))
+				l,err := ParseMessage_KLog( boot_ts, line )
+				if err != nil {
+					errchan <- &InputError{ klr.Driver, klr.Id,"ParseMessage_KLog() ", err }
+					continue
+				}
+				dest <- packmsg(klr.Id, l)
 
 			case <-klr.end:
 				return

@@ -17,9 +17,10 @@ import	(
 
 	"./input"
 	"./output"
-	"./message"
 
 	"gopkg.in/fsnotify.v1"
+	"github.com/nathanaelle/syslog5424"
+
 )
 
 
@@ -59,7 +60,7 @@ type	(
 	}
 
 	internal_msg		struct {
-		Severity	int
+		Severity	syslog5424.Priority
 		Category	string
 		Message		string
 	}
@@ -111,9 +112,7 @@ func sd_notify(state,message string) bool {
 }
 
 
-func (mc *mercury_conf)Log(sev int, cat string, msg string) {
-	log.Printf("trace: %v, %s, %s\n", sev, cat, msg)
-
+func (mc *mercury_conf)Log(sev syslog5424.Priority, cat string, msg string) {
 	sd_notify("STATUS",cat+": "+msg+"\n")
 	mc.internalchan <- internal_msg { sev, cat, msg }
 }
@@ -121,18 +120,18 @@ func (mc *mercury_conf)Log(sev int, cat string, msg string) {
 
 func (mc *mercury_conf)MainLoop(){
 	sd_notify("READY","1")
-	mc.Log(message.LOG_NOTICE, "start", "drivers available=" + strconv.Itoa(len(mc.drivers)))
+	mc.Log(syslog5424.LOG_NOTICE, "start", "drivers available=" + strconv.Itoa(len(mc.drivers)))
 	log.SetFlags(log.Ltime | log.Lshortfile)
 	pid	:= strconv.Itoa(os.Getpid())
 
 	for {
 		select {
-			case log := <-mc.internalchan:
-				msg		:= message.CreateMessage( log.Message, MERCURYNAME, message.LOG_SYSLOG|log.Severity ).ProcID(pid)
-				if log.Category != "" && log.Category != "-" {
-					msg	= msg.MsgID( log.Category )
+			case logmsg := <-mc.internalchan:
+				msg		:= syslog5424.CreateMessage( MERCURYNAME, syslog5424.LOG_SYSLOG|logmsg.Severity, logmsg.Message ).ProcID(pid)
+				if logmsg.Category != "" && logmsg.Category != "-" {
+					msg	= msg.MsgID( logmsg.Category )
 				}
-				s_msg		:= msg.Stringify()
+				s_msg		:= msg.String()
 
 				for _,v := range mc.outputs {
 					if out,ok := mc.instances[v]; ok {
@@ -143,10 +142,10 @@ func (mc *mercury_conf)MainLoop(){
 				}
 
 			case	datum := <-mc.inputchan:
-				msg	:= datum.Message.Stringify()
+				msg	:= datum.Message.String()
 				// TODO defensive cast to avoid panic
 				if _,ok := mc.instances[datum.Source].(Input); !ok {
-					mc.Log(	message.LOG_ERR, "dispatcher",
+					mc.Log(	syslog5424.LOG_ERR, "dispatcher",
 						fmt.Sprintf("[%s] is not INPUT",datum.Source))
 					continue
 				}
@@ -155,7 +154,7 @@ func (mc *mercury_conf)MainLoop(){
 				for _,v := range outputs {
 					if out,ok := mc.instances[v]; ok {
 						if _,ok := out.(Output); !ok {
-							mc.Log(	message.LOG_ERR, "dispatcher",
+							mc.Log(	syslog5424.LOG_ERR, "dispatcher",
 								fmt.Sprintf("[%s] from [%s] is not OUTPUT", v, datum.Source))
 							continue
 						}
@@ -164,7 +163,7 @@ func (mc *mercury_conf)MainLoop(){
 				}
 
 			case	err := <-mc.errchan:
-				mc.Log(message.LOG_ERR, "plugin", err.Error())
+				mc.Log(syslog5424.LOG_ERR, "plugin", err.Error())
 
 			case	<-mc.mainend:
 				return
@@ -175,7 +174,7 @@ func (mc *mercury_conf)MainLoop(){
 
 func (mc *mercury_conf)End(){
 	<-mc.end
-	mc.Log(message.LOG_NOTICE, "end", "stopping")
+	mc.Log(syslog5424.LOG_NOTICE, "end", "stopping")
 
 	for _,v := range mc.instances {
 		if v.DriverType() == "INPUT" {
@@ -190,7 +189,7 @@ func (mc *mercury_conf)End(){
 	}
 
 	sd_notify("STOPPING","1")
-	time.Sleep(500*time.Millisecond)
+	time.Sleep(200*time.Millisecond)
 	mc.mainend<-true
 }
 
@@ -249,13 +248,11 @@ func (mc *mercury_conf)watch(watcher *fsnotify.Watcher) {
 
 
 func (mc *mercury_conf)Load(dirpath string, outputs []string) {
-	log.Printf("start_instance %s\n", "stderr" )
 	stderr_inst	:= new(output.StdErr)
 	mc.instances["stderr"]	= Driver(stderr_inst)
 	go stderr_inst.Run(mc.errchan)
+	mc.Log(	syslog5424.LOG_DEBUG, "start_instance", "stderr" )
 	mc.outputs = outputs
-
-	log.Printf("load path %s\n", dirpath )
 
 	dir,err	:= ioutil.ReadDir(dirpath)
 	exterminate(err)
@@ -273,22 +270,16 @@ func (mc *mercury_conf)Load(dirpath string, outputs []string) {
 
 	go mc.watch(watcher)
 
-	log.Printf("watch path %s\n", dirpath )
-
 	exterminate(watcher.Add(dirpath))
 }
-
-
-
-
 
 
 func (mc *mercury_conf)start_instance(fullname string) {
 	mc.glock.Lock()
 	defer	mc.glock.Unlock()
 
-	//mc.Log(	message.LOG_DEBUG, "start_instance", fullname )
-	log.Printf("start_instance %s\n", fullname )
+	mc.Log(	syslog5424.LOG_DEBUG, "start_instance", fullname )
+	//log.Printf("start_instance %s\n", fullname )
 
 	if _,ok	:= mc.file2id[fullname]; ok {
 		return
@@ -336,8 +327,7 @@ func (mc *mercury_conf)start_instance(fullname string) {
 
 	mc.instances[id]	= conf
 	mc.file2id[fullname]	= id
-	mc.Log(	message.LOG_NOTICE, "instance", fmt.Sprintf("start [%s] as %s[%s]",fullname,  drv.DriverType(),  drv.DriverName() ))
-	//log.Printf("start [%s] as %s[%s]\n",fullname,  drv.DriverType(),  drv.DriverName() )
+	mc.Log(	syslog5424.LOG_NOTICE, "instance", fmt.Sprintf("start [%s] as %s[%s]",fullname,  drv.DriverType(),  drv.DriverName() ))
 }
 
 
@@ -357,5 +347,5 @@ func (mc *mercury_conf)stop_instance(fullname string) {
 	mc.instances[mc.file2id[fullname]].End()
 
 	delete(mc.file2id, fullname)
-	mc.Log(	message.LOG_NOTICE, "instance", fmt.Sprintf("stop [%s]",fullname ))
+	mc.Log(	syslog5424.LOG_NOTICE, "instance", fmt.Sprintf("stop [%s]",fullname ))
 }

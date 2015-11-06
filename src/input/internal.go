@@ -6,7 +6,7 @@ import	(
 	"runtime"
 	"strconv"
 
-	"../message"
+	"github.com/nathanaelle/syslog5424"
 
 	types	"github.com/nathanaelle/useful.types"
 )
@@ -61,11 +61,10 @@ func (intl *InternalReport)Run(dest chan<- Message, errchan chan<- error) {
 					Stack:		uint(memStats.StackInuse),
 				}
 
-				msg	:= message.CreateMessage(
-						stringify_statistics( stat ),
+				dest	<- packmsg(intl.Id, syslog5424.CreateMessage(
 						intl.AppName,
-						message.LOG_SYSLOG|message.LOG_INFO ).ProcID(pid).MsgID("statistics")
-				dest	<- packmsg(intl.Id, *msg)
+						syslog5424.LOG_SYSLOG|syslog5424.LOG_INFO,
+						stringify_statistics( stat ) ).ProcID(pid).MsgID("statistics"))
 
 			case <-intl.end:
 				return
