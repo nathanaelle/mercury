@@ -28,20 +28,22 @@ type	(
 	Input	interface {
 		Driver
 		SendTo()	[]string
-		Run(chan<- input.Message, chan<- error)
+		Run(chan<- input.Message)
 	}
 
 	Output	interface {
 		Driver
 		Send(string)
-		Run(chan<-error)
+		Run()
 	}
 
 	Driver	interface {
 		DriverName()	string
 		DriverType()	string
+		Configure(chan<-error)
 		End()
 	}
+
 
 	mercury_conf	struct {
 		drivers		map[string]Driver
@@ -250,7 +252,9 @@ func (mc *mercury_conf)watch(watcher *fsnotify.Watcher) {
 func (mc *mercury_conf)Load(dirpath string, outputs []string) {
 	stderr_inst	:= new(output.StdErr)
 	mc.instances["stderr"]	= Driver(stderr_inst)
-	go stderr_inst.Run(mc.errchan)
+	stderr_inst.Configure(mc.errchan)
+	go stderr_inst.Run()
+
 	mc.Log(	syslog5424.LOG_DEBUG, "start_instance", "stderr" )
 	mc.outputs = outputs
 
@@ -278,10 +282,10 @@ func (mc *mercury_conf)start_instance(fullname string) {
 	mc.glock.Lock()
 	defer	mc.glock.Unlock()
 
-	mc.Log(	syslog5424.LOG_DEBUG, "start_instance", fullname )
-	//log.Printf("start_instance %s\n", fullname )
+	mc.Log(	syslog5424.LOG_DEBUG, "start_instance", fmt.Sprintf("try to start [%s]",fullname ))
 
-	if _,ok	:= mc.file2id[fullname]; ok {
+	if oid,ok	:= mc.file2id[fullname]; ok {
+		mc.Log(	syslog5424.LOG_WARNING, "start_instance", fmt.Sprintf("%s already started as %s", fullname, oid ))
 		return
 	}
 
@@ -295,16 +299,23 @@ func (mc *mercury_conf)start_instance(fullname string) {
 
 	id,ok	:= t_conf["id"].(string)
 	if !ok	{
+		mc.Log(	syslog5424.LOG_WARNING, "start_instance", fmt.Sprintf("%s no id provided", fullname ))
 		return
+	}
+
+	if oid, ok := mc.instances[id]; ok {
+		mc.Log(	syslog5424.LOG_WARNING, "start_instance", fmt.Sprintf("%s id %s already used", fullname, oid ))
 	}
 
 	driver,ok:= t_conf["driver"].(string)
 	if !ok	{
+		mc.Log(	syslog5424.LOG_WARNING, "start_instance", fmt.Sprintf("%s no driver provided", fullname ))
 		return
 	}
 
 	drv,ok	:= mc.drivers[driver]
 	if !ok	{
+		mc.Log(	syslog5424.LOG_WARNING, "start_instance", fmt.Sprintf("%s unknown driver %s", fullname, driver ))
 		return
 	}
 
@@ -313,21 +324,23 @@ func (mc *mercury_conf)start_instance(fullname string) {
 	err	= json.Unmarshal(raw_conf, conf)
 	exterminate(err)
 
+	conf.Configure(mc.errchan)
 	switch drv.DriverType() {
 
 		case	"INPUT":
-			go conf.(Input).Run(mc.inputchan, mc.errchan)
+			go conf.(Input).Run(mc.inputchan)
 
 		case	"OUTPUT":
-			go conf.(Output).Run(mc.errchan)
+			go conf.(Output).Run()
 
 		default:
+			mc.Log(	syslog5424.LOG_WARNING, "start_instance", fmt.Sprintf("%s unknown driver type %s", fullname, drv.DriverType() ))
 			return
 	}
 
 	mc.instances[id]	= conf
 	mc.file2id[fullname]	= id
-	mc.Log(	syslog5424.LOG_NOTICE, "instance", fmt.Sprintf("start [%s] as %s[%s]",fullname,  drv.DriverType(),  drv.DriverName() ))
+	mc.Log(	syslog5424.LOG_NOTICE, "start_instance", fmt.Sprintf("start [%s] as %s[%s]",fullname,  drv.DriverType(),  drv.DriverName() ))
 }
 
 
@@ -336,16 +349,22 @@ func (mc *mercury_conf)stop_instance(fullname string) {
 	mc.glock.Lock()
 	defer	mc.glock.Unlock()
 
-	if _,ok	:= mc.file2id[fullname]; !ok {
+	mc.Log(	syslog5424.LOG_DEBUG, "stop_instance", fmt.Sprintf("try to stop [%s]",fullname ))
+
+	id, ok	:= mc.file2id[fullname]
+	if !ok {
+		mc.Log(	syslog5424.LOG_WARNING, "stop_instance", fmt.Sprintf("no id available for %s", fullname ))
 		return
 	}
 
-	if _,ok	:= mc.instances[mc.file2id[fullname]]; !ok {
+	if _,ok	= mc.instances[id]; !ok {
+		mc.Log(	syslog5424.LOG_WARNING, "stop_instance", fmt.Sprintf("no instances for known id %s for %s", id, fullname ))
 		return
 	}
 
-	mc.instances[mc.file2id[fullname]].End()
 
+	mc.instances[id].End()
+	delete(mc.instances, id)
 	delete(mc.file2id, fullname)
-	mc.Log(	syslog5424.LOG_NOTICE, "instance", fmt.Sprintf("stop [%s]",fullname ))
+	mc.Log(	syslog5424.LOG_NOTICE, "stop_instance", fmt.Sprintf("stop [%s] id %s",fullname, id ))
 }
