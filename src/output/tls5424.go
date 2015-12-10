@@ -14,8 +14,19 @@ type	TLS5424	struct {
 	Remote	string		`json:"remote"`
 }
 
-func (p *TLS5424)DriverName() string {
+func (p *TLS5424) DriverName() string {
 	return	"o_tls5424"
+}
+
+
+func (p *TLS5424) Configure(errchan chan<- error) {
+	p.end		= make(chan bool)
+	p.source	= make(chan string, 100)
+	p.errchan	= errchan
+
+	if p.Remote == "" {
+		panic("Remote mandatory")
+	}
 }
 
 
@@ -29,10 +40,7 @@ func connect_tls_remote(remote_host string, tlsConfig *tls.Config)	(*tls.Conn,er
 }
 
 
-func (p *TLS5424)Run(errchan chan<- error) {
-	p.end	= make(chan bool,1)
-	p.source= make(chan string,100)
-
+func (p *TLS5424) Run() {
 	tls_config := &tls.Config{
 		InsecureSkipVerify:	false,
 		MinVersion:		tls.VersionTLS11,
@@ -41,7 +49,7 @@ func (p *TLS5424)Run(errchan chan<- error) {
 
 	conn,err:= connect_tls_remote( p.Remote, tls_config )
 	if err != nil {
-		errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
+		p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
 		return
 	}
 
@@ -57,13 +65,13 @@ func (p *TLS5424)Run(errchan chan<- error) {
 					if (nOErr.Op != "write" ||(
 					nOErr.Err.Error() != "connection refused" &&
 					nOErr.Err.Error() != "broken pipe" )) {
-						errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
+						p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
 						return
 					}
 					time.Sleep(10 * time.Second)
 					conn,err= connect_tls_remote( p.Remote, tls_config )
 					if err != nil {
-						errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
+						p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
 						return
 					}
 					_, err	= conn.Write( []byte(text+"\n") )

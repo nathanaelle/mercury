@@ -5,44 +5,29 @@ import	(
 	"net"
 )
 
+
 type	DevLogReader struct {
 	GenericInput
 	Devlog	string		`json:"devlog"`
 }
 
 
-func (devlog *DevLogReader)DriverName() string {
+func (devlog *DevLogReader) DriverName() string {
 	return	"i_devlog"
 }
 
 
+func (devlog *DevLogReader) Configure(errchan chan<- error) {
+	devlog.end	= make(chan bool,1)
+	devlog.errchan	= errchan
 
-func (devlog *DevLogReader)cope_with(conn *net.UnixConn, buffer []byte, dest chan<- Message) {
-	_,_,err := conn.ReadFrom(buffer)
-	if err != nil {
-		devlog.errchan <- &InputError{ devlog.Driver, devlog.Id,"ReadFrom "+devlog.Devlog , err }
-		return
+	if devlog.Devlog == "" {
+		devlog.Devlog = "/dev/log"
 	}
-
-	line	:= rtrim_blank(buffer)
-	if (len(line) == 0 ){
-		return
-	}
-
-	l, err := parse_3164_or_5424( devlog.Id, line )
-	if err != nil {
-		devlog.errchan <-  &InputError{ devlog.Driver, devlog.Id,"parse_3164_or_5424 "+devlog.Devlog , err }
-		return
-	}
-
-	dest <- l
 }
 
 
-
-func (devlog *DevLogReader)Run(dest chan<-Message, errchan chan<- error) {
-	devlog.end	= make(chan bool,1)
-	devlog.errchan	= errchan
+func (devlog *DevLogReader) Run(dest chan<-Message) {
 	conn, err := net.ListenUnixgram("unixgram",  &net.UnixAddr { devlog.Devlog, "unixgram" } )
 	for err != nil {
 		switch err.(type) {
@@ -78,4 +63,25 @@ func (devlog *DevLogReader)Run(dest chan<-Message, errchan chan<- error) {
 		}
 	}
 
+}
+
+func (devlog *DevLogReader) cope_with(conn *net.UnixConn, buffer []byte, dest chan<- Message) {
+	_,_,err := conn.ReadFrom(buffer)
+	if err != nil {
+		devlog.errchan <- &InputError{ devlog.Driver, devlog.Id,"ReadFrom "+devlog.Devlog , err }
+		return
+	}
+
+	line	:= rtrim_blank(buffer)
+	if (len(line) == 0 ){
+		return
+	}
+
+	l, err := parse_3164_or_5424( devlog.Id, line )
+	if err != nil {
+		devlog.errchan <-  &InputError{ devlog.Driver, devlog.Id,"parse_3164_or_5424 "+devlog.Devlog , err }
+		return
+	}
+
+	dest <- l
 }

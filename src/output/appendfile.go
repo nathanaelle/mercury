@@ -11,20 +11,27 @@ type	AppendFile	struct {
 	File	string		`json:"file"`
 }
 
-func (p *AppendFile)DriverName() string {
+
+func (p *AppendFile) DriverName() string {
 	return	"o_appendfile"
 }
 
 
+func (p *AppendFile) Configure(errchan chan<- error) {
+	p.end		= make(chan bool)
+	p.source	= make(chan string, 100)
+	p.errchan	= errchan
+
+	if p.File == "" {
+		panic("File mandatory")
+	}
+}
 
 
-func (p *AppendFile)Run(errchan chan<- error) {
-	p.end	= make(chan bool,1)
-	p.source= make(chan string,100)
-
+func (p *AppendFile) Run() {
 	f, err	:= os.OpenFile(p.File, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
-		errchan <- &OutputError { p.Driver, p.Id, "Open "+p.File, err }
+		p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.File, err }
 		return
 	}
 	defer	f.Close()
@@ -37,7 +44,7 @@ func (p *AppendFile)Run(errchan chan<- error) {
 			case text := <- p.source:
 				_, err = f.WriteString(text+"\n");
 				if err != nil {
-					errchan <- &OutputError { p.Driver, p.Id, "Write "+p.File, err }
+					p.errchan <- &OutputError { p.Driver, p.Id, "Write "+p.File, err }
 					return
 				}
 		}

@@ -20,9 +20,36 @@ type	FIFOReader	struct {
 }
 
 
-func (fifo *FIFOReader)DriverName() string {
+func (fifo *FIFOReader) DriverName() string {
 	return	"i_fifo"
 }
+
+
+func (fifo *FIFOReader) Configure(errchan chan<- error) {
+	fifo.end	= make(chan bool,1)
+	fifo.errchan	= errchan
+
+	if fifo.Source == "" {
+		panic("Source mandatory")
+	}
+
+	if fifo.AppName == "" {
+		panic("AppName mandatory")
+	}
+
+	if fifo.Priority == "" {
+		panic("Priority mandatory")
+	}
+
+	fifo.prio	= new(syslog5424.Priority)
+	err		:= fifo.prio.Set(fifo.Priority)
+	if err != nil {
+		fifo.errchan <- &InputError{ fifo.Driver, fifo.Id,"Priority "+fifo.Priority, err }
+		return
+	}
+
+}
+
 
 
 func (fifo *FIFOReader) Read(p []byte) (n int, err error) {
@@ -35,20 +62,13 @@ func (fifo *FIFOReader) Read(p []byte) (n int, err error) {
 }
 
 
-func (fifo *FIFOReader)Run(dest chan<- Message, errchan chan<- error) {
+func (fifo *FIFOReader) Run(dest chan<- Message) {
 	var err error
-	fifo.end	= make(chan bool,1)
-	fifo.prio	= new(syslog5424.Priority)
-	err		= fifo.prio.Set(fifo.Priority)
-	if err != nil {
-		errchan <- &InputError{ fifo.Driver, fifo.Id,"Priority "+fifo.Priority, err }
-		return
-	}
 
 	syscall.Mkfifo(fifo.Source, 0644)
 	fifo.fi_des,err	= os.OpenFile( fifo.Source, os.O_RDONLY, 0644 )
 	if err != nil {
-		errchan <- &InputError{ fifo.Driver, fifo.Id,"FIFO "+fifo.Source, err }
+		fifo.errchan <- &InputError{ fifo.Driver, fifo.Id,"FIFO "+fifo.Source, err }
 		return
 	}
 

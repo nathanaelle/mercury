@@ -10,14 +10,19 @@ type	StdErr	struct {
 }
 
 
-func (p *StdErr)DriverName() string {
+func (p *StdErr) DriverName() string {
 	return	"o_stderr"
 }
 
 
-func (p *StdErr)Run(errchan chan<- error) {
-	p.end	= make(chan bool,1)
-	p.source= make(chan string,100)
+func (p *StdErr) Configure(errchan chan<- error) {
+	p.end		= make(chan bool)
+	p.source	= make(chan string, 100)
+	p.errchan	= errchan
+}
+
+
+func (p *StdErr) Run() {
 
 	for {
 		select {
@@ -27,7 +32,7 @@ func (p *StdErr)Run(errchan chan<- error) {
 			case text := <- p.source:
 				_, err := os.Stderr.WriteString(text+"\n");
 				if err != nil {
-					errchan <- &OutputError { p.Driver, p.Id, "Write STDErr", err }
+					p.errchan <- &OutputError { p.Driver, p.Id, "Write STDErr", err }
 					return
 				}
 		}

@@ -12,18 +12,26 @@ type	TCP5424	struct {
 }
 
 
-func (p *TCP5424)DriverName() string {
+func (p *TCP5424) DriverName() string {
 	return	"o_tcp5424"
 }
 
 
-func (p *TCP5424)Run(errchan chan<- error) {
-	p.end	= make(chan bool,1)
-	p.source= make(chan string,100)
+func (p *TCP5424) Configure(errchan chan<- error) {
+	p.end		= make(chan bool)
+	p.source	= make(chan string, 100)
+	p.errchan	= errchan
 
+	if p.Remote == "" {
+		panic("Remote mandatory")
+	}
+}
+
+
+func (p *TCP5424) Run() {
 	conn,err:= connect_remote( p.Remote )
 	if err != nil {
-		errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
+		p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
 		return
 	}
 
@@ -41,13 +49,13 @@ func (p *TCP5424)Run(errchan chan<- error) {
 					nOErr.Err.Error() != "connection refused" &&
 					nOErr.Err.Error() != "broken pipe" &&
 					nOErr.Err.Error() != "connection timed out" )) {
-						errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
+						p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
 						return
 					}
 					time.Sleep(10 * time.Second)
 					conn,err= connect_remote( p.Remote )
 					if err != nil {
-						errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
+						p.errchan <- &OutputError { p.Driver, p.Id, "Open "+p.Remote, err }
 						return
 					}
 					_, err = conn.Write( []byte(text+"\n") )

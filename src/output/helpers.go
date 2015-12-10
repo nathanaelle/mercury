@@ -13,6 +13,7 @@ type	GenericOutput struct {
 
 	end	chan bool
 	source	chan string
+	errchan chan<- error
 }
 
 
@@ -22,7 +23,6 @@ func (p *GenericOutput)DriverType() string {
 
 
 func (p *GenericOutput)End() {
-	p.end <- true
 	close(p.end)
 }
 
@@ -84,6 +84,8 @@ net/OpError 3: Err error = no route to host
 	 *	Linger Close	= 5s
 	 *	KeepAlive	= 2s
 	 */
+
+	tcpconn.SetWriteBuffer(1<<20)
 
 	if err	= tcpconn.SetLinger( 5 ); err != nil {
 		return nil,err

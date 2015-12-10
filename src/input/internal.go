@@ -28,8 +28,21 @@ type	(
 )
 
 
-func (intl *InternalReport)DriverName() string {
+func (intl *InternalReport) DriverName() string {
 	return	"i_internal"
+}
+
+func (intl *InternalReport) Configure(errchan chan<- error) {
+	intl.end	= make(chan bool, 1 )
+	intl.errchan	= errchan
+
+	if intl.AppName == "" {
+		panic("AppName mandatory")
+	}
+
+	if intl.Tick.Get().(time.Duration) <= time.Second {
+		intl.Tick.Set("300s")
+	}
 }
 
 
@@ -42,11 +55,10 @@ func stringify_statistics(sr statistic_report) string  {
 }
 
 
-func (intl *InternalReport)Run(dest chan<- Message, errchan chan<- error) {
+func (intl *InternalReport) Run(dest chan<- Message) {
 	memStats	:= new(runtime.MemStats)
 	ticker		:= time.Tick(intl.Tick.Get().(time.Duration) )
 	pid		:= strconv.Itoa(os.Getpid())
-	intl.end	= make(chan bool, 1 )
 
 	for {
 		select {

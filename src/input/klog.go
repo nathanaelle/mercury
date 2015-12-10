@@ -10,8 +10,13 @@ type	KlogReader struct {
 	GenericInput
 }
 
-func (klr *KlogReader)DriverName() string {
+func (klr *KlogReader) DriverName() string {
 	return	"i_klog"
+}
+
+func (klr *KlogReader) Configure(errchan chan<- error) {
+	klr.end		= make(chan bool,1)
+	klr.errchan	= errchan
 }
 
 
@@ -60,11 +65,10 @@ func (klr *KlogReader) Read(p []byte) (int,error) {
 }
 
 
-func (klr *KlogReader)Run(dest chan<- Message, errchan chan<- error) {
-	klr.end		= make(chan bool,1)
+func (klr *KlogReader)Run(dest chan<- Message) {
 	boot_ts,err	:= boot_time()
 	if err != nil {
-		errchan <- &InputError{ klr.Driver, klr.Id,"boot_time() ", err }
+		klr.errchan <- &InputError{ klr.Driver, klr.Id,"boot_time() ", err }
 		return
 	}
 
@@ -80,7 +84,7 @@ func (klr *KlogReader)Run(dest chan<- Message, errchan chan<- error) {
 			case line := <-raw_klog:
 				l,err := ParseMessage_KLog( boot_ts, line )
 				if err != nil {
-					errchan <- &InputError{ klr.Driver, klr.Id,"ParseMessage_KLog() ", err }
+					klr.errchan <- &InputError{ klr.Driver, klr.Id,"ParseMessage_KLog() ", err }
 					continue
 				}
 				dest <- packmsg(klr.Id, l)

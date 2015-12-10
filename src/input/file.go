@@ -23,8 +23,34 @@ type	FileReader struct {
 }
 
 
-func (file *FileReader)DriverName() string {
+func (file *FileReader) DriverName() string {
 	return	"i_tailfile"
+}
+
+
+func (file *FileReader) Configure(errchan chan<- error) {
+	file.end	= make(chan bool,1)
+	file.errchan	= errchan
+
+	if file.Source == "" {
+		panic("Source mandatory")
+	}
+
+	if file.AppName == "" {
+		panic("AppName mandatory")
+	}
+
+	if file.Priority == "" {
+		panic("Priority mandatory")
+	}
+
+	file.prio	= new(syslog5424.Priority)
+	err		:= file.prio.Set(file.Priority)
+	if err != nil {
+		file.errchan <- &InputError{ file.Driver, file.Id,"Priority "+file.Priority , err }
+		return
+	}
+
 }
 
 
@@ -80,20 +106,13 @@ func (file *FileReader) Close() {
 
 
 
-func (file *FileReader)Run(dest chan<- Message, errchan chan<- error) {
+func (file *FileReader) Run(dest chan<- Message) {
 	var err error
-	file.end	= make(chan bool,1)
 
-	file.prio	= new(syslog5424.Priority)
-	err		= file.prio.Set(file.Priority)
-	if err != nil {
-		errchan <- &InputError{ file.Driver, file.Id,"Priority "+file.Priority , err }
-		return
-	}
 
 	file.watcher,err = fsnotify.NewWatcher()
 	if err != nil {
-		errchan <- &InputError{ file.Driver, file.Id,"Watcher "+file.Source , err }
+		file.errchan <- &InputError{ file.Driver, file.Id,"Watcher "+file.Source , err }
 		return
 	}
 
