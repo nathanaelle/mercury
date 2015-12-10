@@ -37,7 +37,7 @@
     * meaning : application name of any new message
   * `tick`
     * optional
-    * default : `"300"`
+    * default : `"300s"`
     * meaning : the name of the datagram unix socket to listen to
 
 
