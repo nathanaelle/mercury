@@ -1,0 +1,19 @@
+description "mercury syslog daemon"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+console log
+respawn
+
+pre-start script
+	ENABLED=$(/bin/ls -1 /etc/mercury/*.conf 2>/dev/null | /usr/bin/wc -l)
+
+	if [ $ENABLED -eq 0 ]
+	then
+		echo "please configure mercury"
+		exit 1
+	fi
+end script
+
+exec /usr/sbin/mercury

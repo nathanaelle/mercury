@@ -1,0 +1,28 @@
+Source: mercury
+Section: admin
+Priority: extra
+Maintainer: Nathanaelle <nathanaelle@users.noreply.github.com>
+Build-Depends: debhelper (>= 9), golang-go (>=1.5), dh-golang
+Standards-Version: 3.9.1
+Homepage: http://github.com/nathanaelle/mercury
+Vcs-Browser: http://github.com/nathanaelle/mercury
+Vcs-Git: http://github.com/nathanaelle/mercury
+
+Package: mercury
+Conflicts: rsyslog, syslog
+Provides: rsyslog, syslog
+Architecture: amd64 armhf
+Depends: ${misc:Depends}
+Built-Using: ${misc:Built-Using}
+Suggests: mercury-conf
+Description: relay local log daemon
+ Daemon that relay all the local logs ( klog, syslog, files, fifo )
+
+
+Package: mercury-default-conf
+Architecture: all
+Depends: mercury
+Conflicts: mercury-conf
+Provides: mercury-conf
+Description: relay local log daemon – default conf & docs
+ Daemon that relay all the local logs ( klog, syslog, files, fifo )

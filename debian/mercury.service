@@ -1,0 +1,13 @@
+[Unit]
+Description=Mercury System Logging Forwarder
+After=network.target
+Requires=syslog.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/mercury
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target
+Alias=syslog.service

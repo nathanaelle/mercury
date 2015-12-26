@@ -1,0 +1,1 @@
+{"id":"systemd","driver":"i_journald","journald":"/run/systemd/journal/syslog","output":["localcopy","remote"]}

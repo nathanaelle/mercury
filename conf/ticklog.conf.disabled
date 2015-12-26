@@ -1,0 +1,1 @@
+{"id":"logtick","driver":"o_appendfile","file":"/var/log/mercury-tick.log"}
